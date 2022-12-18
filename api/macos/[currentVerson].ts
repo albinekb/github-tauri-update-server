@@ -1,6 +1,5 @@
 import { Octokit } from 'octokit'
 import SemVer from 'semver'
-import pMemoize from 'p-memoize'
 import fetch from 'node-fetch'
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
@@ -20,8 +19,6 @@ async function getSignature(url) {
   const text = await response.text()
   return text
 }
-
-const memoizedSignature = pMemoize(getSignature)
 
 async function getLatestRelese() {
   if (!owner) {
@@ -87,6 +84,6 @@ export default async function handler(
   console.log('Returning latest release')
   response.status(200).json({
     ...latestRelease,
-    signature: await memoizedSignature(latestRelease.signature),
+    signature: await getSignature(latestRelease.signature),
   })
 }
