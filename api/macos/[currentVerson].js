@@ -59,11 +59,16 @@ async function getLatestRelese() {
     throw new Error('Could not find signature url')
   }
 
-  const signature = await memoizedSignature(signatureUrl)
   const publishDate = response.data.published_at
   const notes = response.data.body
 
-  return { version, url: updateUrl, pub_date: publishDate, notes, signature }
+  return {
+    version,
+    url: updateUrl,
+    pub_date: publishDate,
+    notes,
+    signature: signatureUrl,
+  }
 }
 
 export default async function handler(request, response) {
@@ -77,5 +82,8 @@ export default async function handler(request, response) {
   }
 
   console.log('Returning latest release')
-  response.status(200).json(latestRelease)
+  response.status(200).json({
+    ...latestRelease,
+    signature: await memoizedSignature(latestRelease.signatureUrl),
+  })
 }
