@@ -2,16 +2,11 @@ import { Octokit } from 'octokit'
 import SemVer from 'semver'
 import pMemoize from 'p-memoize'
 import fetch from 'node-fetch'
+import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 const owner = process.env.GITHUB_OWNER
 const repo = process.env.GITHUB_REPO
 
-if (!owner) {
-  throw new Error('GITHUB_OWNER is not set')
-}
-if (!repo) {
-  throw new Error('GITHUB_REPO is not set')
-}
 if (!process.env.GITHUB_TOKEN) {
   throw new Error('GITHUB_TOKEN is not set')
 }
@@ -29,6 +24,12 @@ async function getSignature(url) {
 const memoizedSignature = pMemoize(getSignature)
 
 async function getLatestRelese() {
+  if (!owner) {
+    throw new Error('GITHUB_OWNER is not set')
+  }
+  if (!repo) {
+    throw new Error('GITHUB_REPO is not set')
+  }
   const response = await octokit.request(
     'GET /repos/{owner}/{repo}/releases/latest',
     {
@@ -70,7 +71,10 @@ async function getLatestRelese() {
   }
 }
 
-export default async function handler(request, response) {
+export default async function handler(
+  request: VercelRequest,
+  response: VercelResponse,
+) {
   const currentVersion = request.query.currentVerson
   const latestRelease = await getLatestRelese()
 

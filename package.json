@@ -12,5 +12,8 @@
     "octokit": "^2.0.10",
     "p-memoize": "^7.1.1",
     "semver": "^7.3.8"
+  },
+  "devDependencies": {
+    "@vercel/node": "^2.8.1"
   }
 }
