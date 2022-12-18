@@ -1,4 +1,4 @@
-import { Octokit, App } from 'octokit'
+import { Octokit } from 'octokit'
 import SemVer from 'semver'
 import pMemoize from 'p-memoize'
 import fetch from 'node-fetch'
@@ -12,7 +12,6 @@ if (!owner) {
 if (!repo) {
   throw new Error('GITHUB_REPO is not set')
 }
-
 if (!process.env.GITHUB_TOKEN) {
   throw new Error('GITHUB_TOKEN is not set')
 }
@@ -84,6 +83,6 @@ export default async function handler(request, response) {
   console.log('Returning latest release')
   response.status(200).json({
     ...latestRelease,
-    signature: await memoizedSignature(latestRelease.signatureUrl),
+    signature: await memoizedSignature(latestRelease.signature),
   })
 }
