@@ -71,9 +71,11 @@ export default async function handler(request, response) {
   const latestRelease = await getLatestRelese()
 
   if (SemVer.gte(currentVersion, latestRelease.version)) {
+    console.log('No update available')
     response.status(204).end()
     return
   }
 
+  console.log('Returning latest release')
   response.status(200).json(latestRelease)
 }
