@@ -1,6 +1,5 @@
 import { Octokit } from 'octokit'
 import SemVer from 'semver'
-import fetch from 'node-fetch'
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 const owner = process.env.GITHUB_OWNER
@@ -14,7 +13,7 @@ const octokit = new Octokit({
   auth: process.env.GITHUB_TOKEN,
 })
 
-async function getSignature(url) {
+async function getSignature(url: string): Promise<string> {
   const response = await fetch(url)
   const text = await response.text()
   return text
@@ -72,7 +71,7 @@ export default async function handler(
   request: VercelRequest,
   response: VercelResponse,
 ) {
-  const currentVersion = request.query.currentVerson
+  const currentVersion = request.query.currentVerson as string
   const latestRelease = await getLatestRelese()
 
   if (SemVer.gte(currentVersion, latestRelease.version)) {
