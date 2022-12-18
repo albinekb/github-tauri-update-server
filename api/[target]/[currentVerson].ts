@@ -19,7 +19,7 @@ async function getSignature(url: string): Promise<string> {
   return text
 }
 
-async function getLatestRelese() {
+async function getLatestRelese(target: 'x64' | 'aarch64') {
   if (!owner) {
     throw new Error('GITHUB_OWNER is not set')
   }
@@ -41,11 +41,12 @@ async function getLatestRelese() {
       `Error parsing version from tag name ${response.data.tag_name}`,
     )
   }
-  const updateUrl = response.data.assets.find((asset) =>
-    asset.name.endsWith('.tar.gz'),
+  const updateUrl = response.data.assets.find(
+    (asset) => asset.name.endsWith('.tar.gz') && asset.name.includes(target),
   )?.browser_download_url
-  const signatureUrl = response.data.assets.find((asset) =>
-    asset.name.endsWith('.sig'),
+
+  const signatureUrl = response.data.assets.find(
+    (asset) => asset.name.endsWith('.sig') && asset.name.includes(target),
   )?.browser_download_url
 
   if (!updateUrl) {
@@ -67,12 +68,21 @@ async function getLatestRelese() {
   }
 }
 
+const parseTarget = (target: string) => {
+  if (target.includes('aarch64')) {
+    return 'aarch64'
+  }
+  return 'x64'
+}
+
 export default async function handler(
   request: VercelRequest,
   response: VercelResponse,
 ) {
   const currentVersion = request.query.currentVerson as string
-  const latestRelease = await getLatestRelese()
+  const target = parseTarget(request.query.target as string)
+  console.log(request.query.target, target)
+  const latestRelease = await getLatestRelese(target)
 
   if (SemVer.gte(currentVersion, latestRelease.version)) {
     console.log('No update available')

@@ -15,8 +15,5 @@
         }
       ]
     }
-  ],
-  "rewrites": [
-    { "source": "/api/:target/:match*", "destination": "/api/macos/:match*" }
   ]
 }
