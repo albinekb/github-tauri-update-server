@@ -22,7 +22,94 @@ function cleanBody(body: string | null | undefined): string {
   if (!body) return ''
   return `${body.replace(/^(\* .{7}[ \s]*)/g, '* ')}`.trim()
 }
-async function getLatestRelese(target: 'x64' | 'aarch64') {
+function countLines(str: string) {
+  return str.split(/\r\n|\r|\n/).length
+}
+
+function getVersionFromTagName(tagName: string): string {
+  const version = tagName.replace(/^[\D]+/, '')
+  if (!SemVer.valid(version)) {
+    console.log(version)
+    throw new Error(`Error parsing version from tag name ${tagName}`)
+  }
+
+  return version
+}
+
+async function collectReleaseNotes(
+  latestRelease: LatestRelease,
+  currentVersion: string,
+) {
+  const latestVersion = latestRelease.version
+
+  const isMoreThanOneUpdateBehind = SemVer.gt(
+    latestRelease.version,
+    SemVer.inc(currentVersion, 'patch') || currentVersion,
+  )
+
+  if (!isMoreThanOneUpdateBehind) {
+    return cleanBody(latestRelease.notes)
+  }
+
+  console.log(
+    'Collecting release notes between',
+    currentVersion,
+    'and',
+    latestVersion,
+  )
+  const response = await fetch(
+    `https://api.github.com/repos/${owner}/${repo}/releases`,
+    {
+      headers: {
+        Accept: 'application/vnd.github+json',
+        Authorization: `Bearer ${process.env.GITHUB_TOKEN}`,
+        'X-GitHub-Api-Version': '2022-11-28',
+      },
+    },
+  )
+  const releases: Endpoints['GET /repos/{owner}/{repo}/releases']['response']['data'] =
+    await response.json()
+
+  const releasesBetween = releases
+    .map((release) => ({
+      ...release,
+      version: getVersionFromTagName(release.tag_name),
+    }))
+    .filter(
+      ({ version }) =>
+        SemVer.gt(version, currentVersion) &&
+        SemVer.lte(version, latestVersion),
+    )
+    .sort((a, b) => SemVer.compare(a.version, b.version))
+    .reverse()
+
+  if (releasesBetween.length === 1) {
+    return cleanBody(releasesBetween[0].body)
+  }
+
+  const notes = releasesBetween
+    .map((release) => {
+      const cleaned = cleanBody(release.body)
+      const lines = countLines(cleaned)
+
+      return `${release.version}\n${cleanBody(release.body)}`
+    })
+    .join('\n\n')
+
+  return notes
+}
+
+type LatestRelease = {
+  version: string
+  url: string
+  pub_date: string | null
+  notes: string
+  signature: string
+}
+
+async function getLatestRelese(
+  target: 'x64' | 'aarch64',
+): Promise<LatestRelease> {
   if (!owner) {
     throw new Error('GITHUB_OWNER is not set')
   }
@@ -42,11 +129,8 @@ async function getLatestRelese(target: 'x64' | 'aarch64') {
   const data: Endpoints['GET /repos/{owner}/{repo}/releases/latest']['response']['data'] =
     await response.json()
 
-  const version = data.tag_name.replace(/^[\D]+/, '')
-  if (!SemVer.valid(version)) {
-    console.log(version)
-    throw new Error(`Error parsing version from tag name ${data.tag_name}`)
-  }
+  const version = getVersionFromTagName(data.tag_name)
+
   const updateUrl = data.assets.find(
     (asset: any) =>
       asset.name.endsWith('.tar.gz') && asset.name.includes(target),
@@ -106,7 +190,7 @@ const getParams = (request: Request) => {
 
 export default async function handler(request: Request) {
   const params = getParams(request)
-  const currentVersion = params.currentVersion
+  const currentVersion = params.currentVersion as string
   const target = parseTarget(params.target)
 
   const latestRelease = await getLatestRelese(target)
@@ -114,14 +198,20 @@ export default async function handler(request: Request) {
   if (SemVer.gte(currentVersion, latestRelease.version)) {
     console.log('No update available')
 
+    // if (request.headers.get('sec-ch-ua')?.match(/Chromium|Chrome/)) {
+    //   return new Response('No update available', { status: 200 })
+    // }
+
     return new Response(undefined, { status: 204 })
   }
 
-  console.log('Returning latest release')
+  const notes = await collectReleaseNotes(latestRelease, currentVersion)
+
   // @ts-expect-error This is not in lib/dom right now, and we can't augment it.
   return Response.json(
     {
       ...latestRelease,
+      notes,
       signature: await getSignature(latestRelease.signature),
     },
     { status: 200 },
