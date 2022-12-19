@@ -18,6 +18,10 @@ async function getSignature(url: string): Promise<string> {
   return text
 }
 
+function cleanBody(body: string | null | undefined): string {
+  if (!body) return ''
+  return `${body.replace(/^(\* .{7}[ \s]*)/g, '* ')}`.trim()
+}
 async function getLatestRelese(target: 'x64' | 'aarch64') {
   if (!owner) {
     throw new Error('GITHUB_OWNER is not set')
@@ -60,7 +64,7 @@ async function getLatestRelese(target: 'x64' | 'aarch64') {
   }
 
   const publishDate = data.published_at
-  const notes = data.body
+  const notes = cleanBody(data.body)
 
   return {
     version,
