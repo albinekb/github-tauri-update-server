@@ -38,7 +38,7 @@ async function getLatestRelese(target: 'x64' | 'aarch64') {
   const data: Endpoints['GET /repos/{owner}/{repo}/releases/latest']['response']['data'] =
     await response.json()
 
-  const version = data.tag_name.replace(/^(app-)?v/, '')
+  const version = data.tag_name.replace(/^[\D]+/, '')
   if (!SemVer.valid(version)) {
     console.log(version)
     throw new Error(`Error parsing version from tag name ${data.tag_name}`)
