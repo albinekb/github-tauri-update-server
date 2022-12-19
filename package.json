@@ -6,8 +6,10 @@
     "vc:dev": "vercel dev"
   },
   "dependencies": {
+    "@types/node": "18.11.17",
     "octokit": "^2.0.10",
-    "semver": "^7.3.8"
+    "semver": "^7.3.8",
+    "typescript": "4.9.4"
   },
   "devDependencies": {
     "@types/semver": "^7.3.13",

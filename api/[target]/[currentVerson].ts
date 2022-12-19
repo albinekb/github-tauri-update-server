@@ -1,6 +1,9 @@
-import { Octokit } from 'octokit'
 import SemVer from 'semver'
-import type { VercelRequest, VercelResponse } from '@vercel/node'
+import type { Endpoints } from '@octokit/types/dist-types/generated/Endpoints'
+
+export const config = {
+  runtime: 'experimental-edge',
+}
 
 const owner = process.env.GITHUB_OWNER
 const repo = process.env.GITHUB_REPO
@@ -8,10 +11,6 @@ const repo = process.env.GITHUB_REPO
 if (!process.env.GITHUB_TOKEN) {
   throw new Error('GITHUB_TOKEN is not set')
 }
-
-const octokit = new Octokit({
-  auth: process.env.GITHUB_TOKEN,
-})
 
 async function getSignature(url: string): Promise<string> {
   const response = await fetch(url)
@@ -26,27 +25,31 @@ async function getLatestRelese(target: 'x64' | 'aarch64') {
   if (!repo) {
     throw new Error('GITHUB_REPO is not set')
   }
-  const response = await octokit.request(
-    'GET /repos/{owner}/{repo}/releases/latest',
+  const response = await fetch(
+    `https://api.github.com/repos/${owner}/${repo}/releases/latest`,
     {
-      owner,
-      repo,
+      headers: {
+        Accept: 'application/vnd.github+json',
+        Authorization: `Bearer ${process.env.GITHUB_TOKEN}`,
+        'X-GitHub-Api-Version': '2022-11-28',
+      },
     },
   )
+  const data: Endpoints['GET /repos/{owner}/{repo}/releases/latest']['response']['data'] =
+    await response.json()
 
-  const version = response.data.tag_name.replace('app-v', '')
+  const version = data.tag_name.replace('app-v', '')
   if (!SemVer.valid(version)) {
     console.log(version)
-    throw new Error(
-      `Error parsing version from tag name ${response.data.tag_name}`,
-    )
+    throw new Error(`Error parsing version from tag name ${data.tag_name}`)
   }
-  const updateUrl = response.data.assets.find(
-    (asset) => asset.name.endsWith('.tar.gz') && asset.name.includes(target),
+  const updateUrl = data.assets.find(
+    (asset: any) =>
+      asset.name.endsWith('.tar.gz') && asset.name.includes(target),
   )?.browser_download_url
 
-  const signatureUrl = response.data.assets.find(
-    (asset) => asset.name.endsWith('.sig') && asset.name.includes(target),
+  const signatureUrl = data.assets.find(
+    (asset: any) => asset.name.endsWith('.sig') && asset.name.includes(target),
   )?.browser_download_url
 
   if (!updateUrl) {
@@ -56,8 +59,8 @@ async function getLatestRelese(target: 'x64' | 'aarch64') {
     throw new Error('Could not find signature url')
   }
 
-  const publishDate = response.data.published_at
-  const notes = response.data.body
+  const publishDate = data.published_at
+  const notes = data.body
 
   return {
     version,
@@ -75,24 +78,48 @@ const parseTarget = (target: string) => {
   return 'x64'
 }
 
-export default async function handler(
-  request: VercelRequest,
-  response: VercelResponse,
-) {
-  const currentVersion = request.query.currentVerson as string
-  const target = parseTarget(request.query.target as string)
-  console.log(request.query.target, target)
+const getParams = (request: Request) => {
+  try {
+    const { searchParams } = new URL(request.url)
+
+    const currentVersion = searchParams.get('currentVersion') as string
+    const target = searchParams.get('target') as string
+
+    if (currentVersion && target) {
+      return { currentVersion, target }
+    }
+
+    const parsed = request.url.split('?')[1].split('=')
+    return {
+      target: parsed[1].split('%')[0],
+      currentVersion: parsed[2],
+    }
+  } catch (error) {
+    console.log(error)
+    throw new Error('Error parsing params')
+  }
+}
+
+export default async function handler(request: Request) {
+  const params = getParams(request)
+  const currentVersion = params.currentVersion
+  const target = parseTarget(params.target)
+
   const latestRelease = await getLatestRelese(target)
 
   if (SemVer.gte(currentVersion, latestRelease.version)) {
     console.log('No update available')
-    response.status(204).end()
-    return
+
+    return new Response(undefined, { status: 204 })
   }
 
   console.log('Returning latest release')
-  response.status(200).json({
-    ...latestRelease,
-    signature: await getSignature(latestRelease.signature),
-  })
+  // @ts-expect-error This is not in lib/dom right now, and we can't augment it.
+  return Response.json(
+    {
+      ...latestRelease,
+      signature: await getSignature(latestRelease.signature),
+    },
+    { status: 200 },
+  )
 }
